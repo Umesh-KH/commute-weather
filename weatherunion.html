@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Commute Weather — WeatherUnion</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌦️</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,500;1,300;1,500&family=Geist+Mono:wght@400;500&family=Geist:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\/script>
+  <style>
+    :root {
+      --bg:#12100a; --surf:#1c1912; --surf2:#25221a;
+      --bdr:rgba(230,185,80,0.12); --text:#f0e8d5; --muted:#8a7d60;
+      --amber:#e8a832; --rain:#60b4f0; --dry:#72c98a; --storm:#e05c3a;
+      --fh:'Fraunces',Georgia,serif; --fb:'Geist',sans-serif; --fm:'Geist Mono',monospace;
+      --r:16px; --rs:10px;
+    }
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:var(--fb);background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:4rem}
+    nav{background:var(--surf);border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;height:52px;position:sticky;top:0;z-index:1000}
+    .nav-brand{font-family:var(--fh);font-size:1rem;font-style:italic;color:var(--amber)}
+    .nav-tabs{display:flex;gap:4px}
+    .nav-tab{font-family:var(--fm);font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;padding:5px 12px;border-radius:6px;text-decoration:none;color:var(--muted);border:1px solid transparent;transition:all .2s}
+    .nav-tab:hover{color:var(--text);border-color:var(--bdr)}
+    .nav-tab.active{background:rgba(232,168,50,.12);color:var(--amber);border-color:rgba(232,168,50,.25)}
+    .nbadge{font-size:.58rem;padding:1px 6px;border-radius:10px;margin-left:4px;vertical-align:middle}
+    .nb-blue{background:rgba(96,180,240,.15);color:var(--rain);border:1px solid rgba(96,180,240,.3)}
+    .nb-amber{background:rgba(232,168,50,.12);color:var(--amber);border:1px solid rgba(232,168,50,.3)}
+    .key-bar{background:var(--surf);border-bottom:1px solid rgba(114,201,138,.18);padding:.55rem 1.5rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+    .key-bar-left{display:flex;align-items:center;gap:.6rem;font-family:var(--fm);font-size:.68rem}
+    .key-dot{width:8px;height:8px;border-radius:50%;background:var(--dry);box-shadow:0 0 6px rgba(114,201,138,.5);flex-shrink:0}
+    .key-active-text{color:var(--dry)}
+    .key-id{color:var(--muted)}
+    .key-input-row{display:flex;align-items:center;gap:.5rem}
+    .key-input{font-family:var(--fm);font-size:.68rem;letter-spacing:.04em;background:var(--surf2);border:1px solid rgba(232,168,50,.25);color:var(--text);padding:4px 10px;border-radius:6px;width:240px;outline:none}
+    .key-input:focus{border-color:var(--amber)}
+    .key-btn{font-family:var(--fm);font-size:.65rem;letter-spacing:.05em;background:var(--amber);color:#12100a;border:none;padding:5px 10px;border-radius:6px;cursor:pointer;font-weight:500}
+    .header{max-width:940px;margin:0 auto;padding:2rem 1.5rem 1.2rem;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:.8rem}
+    h1{font-family:var(--fh);font-weight:300;font-size:clamp(1.7rem,5vw,2.6rem);line-height:1.1;letter-spacing:-.5px}
+    h1 em{font-style:italic;color:var(--amber)}
+    .src-pill{font-family:var(--fm);font-size:.65rem;letter-spacing:.08em;text-transform:uppercase;padding:3px 10px;border-radius:20px;background:rgba(232,168,50,.1);color:var(--amber);border:1px solid rgba(232,168,50,.25);margin-top:.4rem;display:inline-block}
+    .meta{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+    .ts-pill{font-family:var(--fm);font-size:.68rem;color:var(--muted);background:var(--surf);border:1px solid var(--bdr);padding:5px 12px;border-radius:50px}
+    .refresh-btn{font-family:var(--fm);font-size:.68rem;background:var(--surf2);border:1px solid var(--bdr);color:var(--muted);padding:5px 10px;border-radius:8px;cursor:pointer;transition:all .2s}
+    .refresh-btn:hover{color:var(--text);border-color:rgba(232,168,50,.3)}
+    .page{max-width:940px;margin:0 auto;padding:0 1.5rem}
+    .sec-label{font-family:var(--fm);font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:.85rem;display:flex;align-items:center;gap:.5rem}
+    .sec-label::after{content:'';flex:1;height:1px;background:var(--bdr)}
+    .loc-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:2rem}
+    @media(max-width:560px){.loc-grid,.route-grid{grid-template-columns:1fr}}
+    .loc-card{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r);padding:1.4rem;position:relative;overflow:hidden;transition:border-color .4s}
+    .loc-card.is-rain{border-color:rgba(96,180,240,.35)}
+    .loc-card.is-dry{border-color:rgba(114,201,138,.3)}
+    .loc-card::after{content:'';position:absolute;inset:0;pointer-events:none;border-radius:var(--r);opacity:0;transition:opacity .4s}
+    .loc-card.is-rain::after{background:radial-gradient(ellipse at top left,rgba(96,180,240,.07),transparent 60%);opacity:1}
+    .loc-card.is-dry::after{background:radial-gradient(ellipse at top left,rgba(114,201,138,.06),transparent 60%);opacity:1}
+    .loc-chip{font-family:var(--fm);font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;padding:2px 8px;border-radius:4px;display:inline-block;margin-bottom:.7rem}
+    .chip-home{background:rgba(232,168,50,.12);color:#e8c070;border:1px solid rgba(232,168,50,.2)}
+    .chip-work{background:rgba(224,92,58,.12);color:#e08870;border:1px solid rgba(224,92,58,.2)}
+    .loc-name{font-family:var(--fh);font-size:1.2rem;font-weight:300;line-height:1.25;margin-bottom:.2rem}
+    .loc-addr{font-size:.72rem;color:var(--muted);line-height:1.5;margin-bottom:1rem}
+    .rain-row{display:flex;align-items:center;gap:.55rem;margin-bottom:1rem}
+    .blink{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+    .blink.rain{background:var(--rain);animation:bl 2s ease-in-out infinite;box-shadow:0 0 6px rgba(96,180,240,.6)}
+    .blink.dry{background:var(--dry)}
+    .blink.wait{background:var(--muted)}
+    @keyframes bl{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.5);opacity:.6}}
+    .rain-label{font-family:var(--fh);font-style:italic;font-size:1.4rem}
+    .rain-label.rain{color:var(--rain)}
+    .rain-label.dry{color:var(--dry)}
+    .rain-label.wait{color:var(--muted);font-size:1rem}
+    .cond-text{font-size:.72rem;color:var(--muted);margin-left:2px}
+    .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+    .stat{background:var(--surf2);border:1px solid var(--bdr);border-radius:var(--rs);padding:.55rem .7rem}
+    .stat-l{font-size:.62rem;font-family:var(--fm);text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+    .stat-v{font-family:var(--fm);font-size:.88rem;font-weight:500;color:var(--text);margin-top:2px}
+    .wu-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.5rem}
+    .stat.wu{border-color:rgba(96,180,240,.2);background:rgba(96,180,240,.04)}
+    .stat.wu .stat-l{color:rgba(96,180,240,.7)}
+    .stat.wu.raining .stat-v{color:var(--rain)}
+    /* STATION PANEL */
+    .station-panel{margin-top:.9rem;background:var(--surf2);border:1px solid var(--bdr);border-radius:var(--rs);overflow:hidden}
+    .station-header{display:flex;align-items:center;justify-content:space-between;padding:.5rem .75rem;border-bottom:1px solid var(--bdr);background:rgba(232,168,50,.05)}
+    .station-header-label{font-family:var(--fm);font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--amber);opacity:.8}
+    .station-live-dot{width:6px;height:6px;border-radius:50%;background:var(--dry);box-shadow:0 0 5px rgba(114,201,138,.6);animation:bl 2.5s ease-in-out infinite}
+    .station-live-dot.offline{background:var(--muted);box-shadow:none;animation:none}
+    .station-body{padding:.6rem .75rem;display:flex;flex-direction:column;gap:4px}
+    .srow{display:flex;justify-content:space-between;align-items:baseline;gap:.5rem}
+    .srow-label{font-family:var(--fm);font-size:.62rem;color:var(--muted);letter-spacing:.04em;flex-shrink:0}
+    .srow-val{font-family:var(--fm);font-size:.72rem;color:var(--text);font-weight:500;text-align:right}
+    .srow-val.highlight{color:var(--amber)}
+    .srow-val.sm{font-size:.65rem;color:var(--muted)}
+    /* ROUTES */
+    .route-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:2rem}
+    .route-card{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r);padding:1.4rem}
+    .rnum{font-family:var(--fm);font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:.4rem}
+    .rname{font-family:var(--fh);font-size:1.05rem;font-weight:300;margin-bottom:.2rem}
+    .rvia{font-size:.7rem;color:var(--muted);margin-bottom:.95rem;line-height:1.5}
+    .rdist{font-family:var(--fm);font-size:.7rem;color:var(--amber);margin-left:4px}
+    .rstatus{margin-bottom:.9rem}
+    .spill{font-family:var(--fm);font-size:.66rem;font-weight:500;letter-spacing:.04em;padding:3px 10px;border-radius:20px}
+    .spill.clear{background:rgba(114,201,138,.12);color:var(--dry);border:1px solid rgba(114,201,138,.25)}
+    .spill.rain{background:rgba(96,180,240,.12);color:var(--rain);border:1px solid rgba(96,180,240,.25)}
+    .spill.mixed{background:rgba(232,168,50,.12);color:var(--amber);border:1px solid rgba(232,168,50,.25)}
+    .rpoints{display:flex;flex-direction:column}
+    .rpoint{display:flex;align-items:flex-start;gap:.7rem;position:relative}
+    .rpoint:not(:last-child)::before{content:'';position:absolute;left:6px;top:14px;width:1px;height:calc(100% + 2px);background:var(--bdr)}
+    .rp-dot{width:13px;height:13px;border-radius:50%;border:1.5px solid var(--bdr);background:var(--surf2);flex-shrink:0;margin-top:3px;transition:all .3s}
+    .rp-dot.rain{border-color:var(--rain);background:rgba(96,180,240,.18)}
+    .rp-dot.dry{border-color:var(--dry);background:rgba(114,201,138,.15)}
+    .rp-dot.anchor{border-color:var(--muted);background:var(--muted)}
+    .rp-body{padding-bottom:.85rem;flex:1;min-width:0}
+    .rp-name{font-size:.78rem;font-weight:500;color:var(--text)}
+    .rp-wx{font-family:var(--fm);font-size:.66rem;margin-top:1px;color:var(--muted)}
+    .rp-wx.rain{color:#80c8f8}
+    .rp-wx.dry{color:#80d098}
+    .rp-station{font-family:var(--fm);font-size:.6rem;color:var(--muted);margin-top:2px;opacity:.7}
+    .map-wrap{border-radius:var(--r);overflow:hidden;border:1px solid var(--bdr);height:420px;margin-bottom:2rem;position:relative}
+    #map{height:100%;width:100%}
+    .leaflet-tile{filter:brightness(.65) saturate(.5) sepia(.2)}
+    .leaflet-container{background:#12100a}
+    .map-loading{position:absolute;inset:0;background:var(--surf);display:flex;align-items:center;justify-content:center;z-index:9999;gap:.6rem;font-family:var(--fm);font-size:.72rem;color:var(--muted);letter-spacing:.06em;border-radius:var(--r);transition:opacity .4s}
+    .map-loading.hide{opacity:0;pointer-events:none}
+    .spin{width:16px;height:16px;border:2px solid var(--bdr);border-top-color:var(--amber);border-radius:50%;animation:sp .8s linear infinite}
+    @keyframes sp{to{transform:rotate(360deg)}}
+    .skel{background:linear-gradient(90deg,var(--surf2) 25%,var(--surf) 50%,var(--surf2) 75%);background-size:200% 100%;animation:sk 1.4s linear infinite;border-radius:5px;display:inline-block}
+    @keyframes sk{to{background-position:-200% 0}}
+    .err-box{background:rgba(224,92,58,.08);border:1px solid rgba(224,92,58,.2);border-radius:var(--rs);padding:.6rem .75rem;font-family:var(--fm);font-size:.72rem;color:var(--storm);margin-top:.5rem}
+    .divider{height:1px;background:var(--bdr);margin:1.5rem 0}
+    footer{text-align:center;font-size:.72rem;color:var(--muted);line-height:1.8}
+    footer a{color:var(--muted)}
+    .fi{animation:fi .6s ease both}
+    @keyframes fi{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+    .d1{animation-delay:.08s}.d2{animation-delay:.16s}.d3{animation-delay:.24s}.d4{animation-delay:.32s}.d5{animation-delay:.4s}
+  </style>
+</head>
+<body>
+<nav>
+  <span class="nav-brand">Kudlu ↔ Bellandur</span>
+  <div class="nav-tabs">
+    <a href="index.html" class="nav-tab">Open-Meteo <span class="nbadge nb-blue">Free</span></a>
+    <a href="weatherunion.html" class="nav-tab active">WeatherUnion <span class="nbadge nb-amber">Hyperlocal</span></a>
+  </div>
+</nav>
+
+<div class="key-bar">
+  <div class="key-bar-left">
+    <div class="key-dot"></div>
+    <span class="key-active-text">WeatherUnion API active</span>
+    <span class="key-id" id="key-preview"></span>
+  </div>
+  <div class="key-input-row">
+    <input class="key-input" id="key-input" type="text" placeholder="API key…"/>
+    <button class="key-btn" onclick="saveKey()">Update</button>
+  </div>
+</div>
+
+<div class="header">
+  <div>
+    <h1>Your <em>Commute</em><br>Weather</h1>
+    <span class="src-pill">WeatherUnion · Physical IoT rain gauges · Bengaluru-native · 1 min refresh</span>
+  </div>
+  <div class="meta">
+    <div class="ts-pill">Updated <span id="ts">—</span></div>
+    <button class="refresh-btn" onclick="loadAll()">↻ Refresh</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <div class="sec-label fi">01 &nbsp; Current conditions</div>
+  <div class="loc-grid">
+
+    <div class="loc-card fi d1" id="card-home">
+      <span class="loc-chip chip-home">Home</span>
+      <div class="loc-name">AECS Layout, Singasandra</div>
+      <div class="loc-addr">Kudlu, Bengaluru 560068<br><span style="font-family:var(--fm);font-size:.65rem;">Query coords: 12.8865°N, 77.6493°E</span></div>
+      <div class="rain-row" id="rain-home"><div class="blink wait"></div><span class="rain-label wait">Loading…</span></div>
+      <div class="stat-grid" id="stats-home">
+        <div class="stat"><div class="stat-l">Temp</div><div class="stat-v"><span class="skel" style="width:46px;height:13px"></span></div></div>
+        <div class="stat"><div class="stat-l">Humidity</div><div class="stat-v"><span class="skel" style="width:36px;height:13px"></span></div></div>
+        <div class="stat"><div class="stat-l">Wind Speed</div><div class="stat-v"><span class="skel" style="width:52px;height:13px"></span></div></div>
+        <div class="stat"><div class="stat-l">Wind Dir.</div><div class="stat-v"><span class="skel" style="width:52px;height:13px"></span></div></div>
+      </div>
+      <div class="wu-grid" id="wu-home">
+        <div class="stat wu"><div class="stat-l">Rain Intensity</div><div class="stat-v"><span class="skel" style="width:56px;height:13px"></span></div></div>
+        <div class="stat wu"><div class="stat-l">Accumulation</div><div class="stat-v"><span class="skel" style="width:46px;height:13px"></span></div></div>
+      </div>
+      <div class="station-panel">
+        <div class="station-header">
+          <span class="station-header-label">Data source station</span>
+          <div class="station-live-dot offline" id="sdot-home"></div>
+        </div>
+        <div class="station-body">
+          <div class="srow"><span class="srow-label">Station name</span><span class="srow-val highlight" id="sname-home">—</span></div>
+          <div class="srow"><span class="srow-label">Locality ID</span><span class="srow-val" id="sid-home">—</span></div>
+          <div class="srow"><span class="srow-label">Station coords</span><span class="srow-val sm" id="scoords-home">—</span></div>
+          <div class="srow"><span class="srow-label">Distance from you</span><span class="srow-val" id="sdist-home">—</span></div>
+          <div class="srow"><span class="srow-label">Device type</span><span class="srow-val sm" id="sdev-home">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="loc-card fi d2" id="card-work">
+      <span class="loc-chip chip-work">Work</span>
+      <div class="loc-name">Teachmint Technologies</div>
+      <div class="loc-addr">Opp. Bellandur Police Station, Sarjapur Main Rd<br><span style="font-family:var(--fm);font-size:.65rem;">Query coords: 12.9208°N, 77.6687°E</span></div>
+      <div class="rain-row" id="rain-work"><div class="blink wait"></div><span class="rain-label wait">Loading…</span></div>
+      <div class="stat-grid" id="stats-work">
+        <div class="stat"><div class="stat-l">Temp</div><div class="stat-v"><span class="skel" style="width:46px;height:13px"></span></div></div>
+        <div class="stat"><div class="stat-l">Humidity</div><div class="stat-v"><span class="skel" style="width:36px;height:13px"></span></div></div>
+        <div class="stat"><div class="stat-l">Wind Speed</div><div class="stat-v"><span class="skel" style="width:52px;height:13px"></span></div></div>
+        <div class="stat"><div class="stat-l">Wind Dir.</div><div class="stat-v"><span class="skel" style="width:52px;height:13px"></span></div></div>
+      </div>
+      <div class="wu-grid" id="wu-work">
+        <div class="stat wu"><div class="stat-l">Rain Intensity</div><div class="stat-v"><span class="skel" style="width:56px;height:13px"></span></div></div>
+        <div class="stat wu"><div class="stat-l">Accumulation</div><div class="stat-v"><span class="skel" style="width:46px;height:13px"></span></div></div>
+      </div>
+      <div class="station-panel">
+        <div class="station-header">
+          <span class="station-header-label">Data source station</span>
+          <div class="station-live-dot offline" id="sdot-work"></div>
+        </div>
+        <div class="station-body">
+          <div class="srow"><span class="srow-label">Station name</span><span class="srow-val highlight" id="sname-work">—</span></div>
+          <div class="srow"><span class="srow-label">Locality ID</span><span class="srow-val" id="sid-work">—</span></div>
+          <div class="srow"><span class="srow-label">Station coords</span><span class="srow-val sm" id="scoords-work">—</span></div>
+          <div class="srow"><span class="srow-label">Distance from you</span><span class="srow-val" id="sdist-work">—</span></div>
+          <div class="srow"><span class="srow-label">Device type</span><span class="srow-val sm" id="sdev-work">—</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="sec-label fi d2">02 &nbsp; Route check</div>
+  <div class="route-grid">
+    <div class="route-card fi d3">
+      <div class="rnum">Route 01</div>
+      <div class="rname">Via HSR Layout</div>
+      <div class="rvia">Kudlu → HSR Layout → Agara Junction → Sarjapur Rd<span class="rdist" id="r1dist"></span></div>
+      <div class="rstatus" id="rs-1"><span class="spill mixed"><span class="skel" style="width:80px;height:13px"></span></span></div>
+      <div class="rpoints" id="rp-1">
+        <div class="rpoint"><div class="rp-dot anchor"></div><div class="rp-body"><div class="rp-name">Singasandra / Kudlu</div><div class="rp-wx"><span class="skel" style="width:80px;height:10px"></span></div></div></div>
+        <div class="rpoint"><div class="rp-dot"></div><div class="rp-body"><div class="rp-name">HSR Layout</div><div class="rp-wx"><span class="skel" style="width:80px;height:10px"></span></div></div></div>
+        <div class="rpoint"><div class="rp-dot anchor"></div><div class="rp-body"><div class="rp-name">Bellandur, Sarjapur Rd</div><div class="rp-wx"><span class="skel" style="width:80px;height:10px"></span></div></div></div>
+      </div>
+    </div>
+    <div class="route-card fi d4">
+      <div class="rnum">Route 02</div>
+      <div class="rname">Via Haralur Road</div>
+      <div class="rvia">Kudlu Gate → Haralur Rd → Sarjapur Rd<span class="rdist" id="r2dist"></span></div>
+      <div class="rstatus" id="rs-2"><span class="spill mixed"><span class="skel" style="width:80px;height:13px"></span></span></div>
+      <div class="rpoints" id="rp-2">
+        <div class="rpoint"><div class="rp-dot anchor"></div><div class="rp-body"><div class="rp-name">Singasandra / Kudlu</div><div class="rp-wx"><span class="skel" style="width:80px;height:10px"></span></div></div></div>
+        <div class="rpoint"><div class="rp-dot"></div><div class="rp-body"><div class="rp-name">Haralur Road Mid</div><div class="rp-wx"><span class="skel" style="width:80px;height:10px"></span></div></div></div>
+        <div class="rpoint"><div class="rp-dot anchor"></div><div class="rp-body"><div class="rp-name">Bellandur, Sarjapur Rd</div><div class="rp-wx"><span class="skel" style="width:80px;height:10px"></span></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec-label fi d4">03 &nbsp; On the map</div>
+  <div class="map-wrap fi d5">
+    <div class="map-loading" id="map-loading"><div class="spin"></div>Fetching road routes…</div>
+    <div id="map"></div>
+  </div>
+
+  <div class="divider"></div>
+  <footer>
+    Weather · <a href="https://www.weatherunion.com" target="_blank">WeatherUnion by Zomato</a> — physical IoT stations, free API, 1,000 req/day &nbsp;·&nbsp;
+    Routes · <a href="https://project-osrm.org" target="_blank">OSRM</a> &nbsp;·&nbsp;
+    Map · <a href="https://openstreetmap.org" target="_blank">OpenStreetMap</a><br>
+    API key stored in browser localStorage only — never sent anywhere except weatherunion.com
+  </footer>
+</div>
+
+<script>
+const DEFAULT_KEY = 'eafdd5565ecf0844bfe4550d18898595';
+const LS_KEY      = 'wu_api_key';
+
+const HOME = { lat:12.8865,  lon:77.6493 };
+const WORK = { lat:12.9208,  lon:77.6687 };
+const MID1 = { lat:12.9116,  lon:77.6474, label:'HSR Layout' };
+const MID2 = { lat:12.9050,  lon:77.6610, label:'Haralur Road Mid' };
+
+// Known WeatherUnion stations in the corridor
+// Identified from weatherunion.com URL patterns and user-provided data
+const WU_STATIONS = [
+  { id:'ZWL001196', name:'HSR Layout',      lat:12.908482, lon:77.641773 },
+  { id:'ZWL004164', name:'Bellandur',        lat:12.9330,   lon:77.6850  },
+  { id:'ZWL001156', name:'Koramangala',      lat:12.9352,   lon:77.6245  },
+  { id:'ZWL006274', name:'Electronic City',  lat:12.8399,   lon:77.6770  },
+];
+
+const FB1 = [[12.8865,77.6493],[12.8920,77.6490],[12.8980,77.6483],[12.9040,77.6476],[12.9116,77.6474],[12.9160,77.6438],[12.9202,77.6400],[12.9205,77.6500],[12.9207,77.6600],[12.9208,77.6687]];
+const FB2 = [[12.8865,77.6493],[12.8900,77.6530],[12.8960,77.6570],[12.9020,77.6595],[12.9050,77.6610],[12.9110,77.6640],[12.9160,77.6670],[12.9208,77.6687]];
+
+function getKey(){ return localStorage.getItem(LS_KEY) || DEFAULT_KEY; }
+function saveKey(){
+  const v = document.getElementById('key-input').value.trim();
+  if(!v) return;
+  localStorage.setItem(LS_KEY, v);
+  updateKeyBar();
+  loadAll();
+}
+function updateKeyBar(){
+  const k = getKey();
+  document.getElementById('key-preview').textContent = k ? '···' + k.slice(-8) : '';
+  document.getElementById('key-input').value = k;
+}
+
+// Haversine distance in km
+function haversine(la1,lo1,la2,lo2){
+  const R=6371, dL=(la2-la1)*Math.PI/180, dO=(lo2-lo1)*Math.PI/180;
+  const a=Math.sin(dL/2)**2+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dO/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function nearestStation(lat,lon){
+  let best=null, bd=Infinity;
+  for(const s of WU_STATIONS){ const d=haversine(lat,lon,s.lat,s.lon); if(d<bd){bd=d;best=s;} }
+  return {station:best, dist:bd};
+}
+
+// WeatherUnion coordinate-based API call
+async function fetchWU(lat, lon){
+  const url=`https://www.weatherunion.com/gw/weather/external/v0/get_weather_data?latitude=${lat}&longitude=${lon}`;
+  const r=await fetch(url,{headers:{'x-zomato-api-key':getKey()}});
+  const j=await r.json();
+  if(j.status!==200) throw new Error(j.message||`WU status ${j.status}`);
+  const d=j.locality_weather_data||{};
+  const ri=parseFloat(d.rain_intensity)||0;
+  const ra=parseFloat(d.rain_accumulation)||0;
+  return {
+    temp:      d.temperature    !=null ? parseFloat(d.temperature)    : null,
+    hum:       d.humidity       !=null ? parseFloat(d.humidity)       : null,
+    wind:      d.wind_speed     !=null ? parseFloat(d.wind_speed)     : null,
+    windDir:   d.wind_direction !=null ? parseFloat(d.wind_direction) : null,
+    rainInt:   ri, rainAcc:ra,
+    deviceType:j.device_type,
+    raining:   ri>0||ra>0,
+    label:     ri>1?'Heavy rain':ri>0?'Light rain':ra>5?'Recent heavy rain':ra>0?'Recent rain':'Dry',
+  };
+}
+
+function compass(d){
+  if(d==null||isNaN(d)) return '—';
+  return ['N','NE','E','SE','S','SW','W','NW'][Math.round(d/45)%8]+' '+d.toFixed(0)+'°';
+}
+
+function renderLoc(id, w, qLat, qLon){
+  document.getElementById('card-'+id).className='loc-card fi is-'+(w.raining?'rain':'dry');
+  document.getElementById('rain-'+id).innerHTML=
+    `<div class="blink ${w.raining?'rain':'dry'}"></div>
+     <span class="rain-label ${w.raining?'rain':'dry'}">${w.raining?'Raining':'Dry'}</span>
+     <span class="cond-text">${w.label}</span>`;
+  document.getElementById('stats-'+id).innerHTML=`
+    <div class="stat"><div class="stat-l">Temp</div><div class="stat-v">${w.temp!=null?w.temp.toFixed(1)+' °C':'—'}</div></div>
+    <div class="stat"><div class="stat-l">Humidity</div><div class="stat-v">${w.hum!=null?w.hum.toFixed(0)+' %':'—'}</div></div>
+    <div class="stat"><div class="stat-l">Wind Speed</div><div class="stat-v">${w.wind!=null?w.wind.toFixed(1)+' km/h':'—'}</div></div>
+    <div class="stat"><div class="stat-l">Wind Dir.</div><div class="stat-v">${compass(w.windDir)}</div></div>`;
+  document.getElementById('wu-'+id).innerHTML=`
+    <div class="stat wu ${w.rainInt>0?'raining':''}">
+      <div class="stat-l">Rain Intensity</div>
+      <div class="stat-v">${w.rainInt!=null?w.rainInt.toFixed(2)+' mm/min':'—'}</div>
+    </div>
+    <div class="stat wu ${w.rainAcc>0?'raining':''}">
+      <div class="stat-l">Accumulation (today)</div>
+      <div class="stat-v">${w.rainAcc!=null?w.rainAcc.toFixed(1)+' mm':'—'}</div>
+    </div>`;
+
+  // Station identification
+  const {station:s, dist:d} = nearestStation(qLat, qLon);
+  const inRange = d <= 2.0;
+  document.getElementById('sdot-'+id).className='station-live-dot'+(inRange?'':' offline');
+  document.getElementById('sname-'+id).textContent   = s ? s.name       : 'Unknown';
+  document.getElementById('sid-'+id).textContent     = s ? s.id         : '—';
+  document.getElementById('scoords-'+id).textContent = s ? s.lat.toFixed(6)+'°N, '+s.lon.toFixed(6)+'°E' : '—';
+  document.getElementById('sdist-'+id).textContent   = s ? d.toFixed(2)+' km away'+(inRange?'':' ⚠ >2km') : '—';
+  document.getElementById('sdev-'+id).textContent    = w.deviceType===1?'Automated weather system':w.deviceType===2?'Mini weather station':'Type '+w.deviceType;
+}
+
+function renderLocError(id, msg){
+  document.getElementById('rain-'+id).innerHTML=`<div class="blink wait"></div><span class="rain-label wait">Error</span>`;
+  document.getElementById('stats-'+id).innerHTML=`<div class="err-box" style="grid-column:span 2">${msg}</div>`;
+}
+
+function renderRoute(n, midLabel, weathers, dist){
+  const v=weathers.filter(Boolean);
+  const allClear=v.length===weathers.length&&v.every(w=>!w.raining);
+  const anyRain=v.some(w=>w.raining);
+  const pc=allClear?'clear':anyRain?'rain':'mixed';
+  const pt=allClear?'✓ Clear route':anyRain?'⚡ Rain on route':'△ Partial data';
+  document.getElementById('rs-'+n).innerHTML=`<span class="spill ${pc}">${pt}</span>`;
+  if(dist) document.getElementById('r'+n+'dist').textContent=' · '+dist+' km';
+  const midPt=n===1?MID1:MID2;
+  const {station:ms, dist:md}=nearestStation(midPt.lat,midPt.lon);
+  const names=['Singasandra / Kudlu', midLabel, 'Bellandur, Sarjapur Rd'];
+  document.getElementById('rp-'+n).innerHTML=weathers.map((w,i)=>{
+    const isA=i===0||i===2;
+    const dc=isA?'anchor':(w?(w.raining?'rain':'dry'):'');
+    const wx=w?`${w.temp!=null?w.temp.toFixed(1)+'°C · ':''}${w.label}${w.rainInt>0?' · '+w.rainInt.toFixed(2)+' mm/min':''}`:'—';
+    const wc=w&&w.raining?'rain':'dry';
+    const st=i===1&&ms?`<div class="rp-station">via ${ms.name} (${ms.id}) · ${md.toFixed(1)} km</div>`:'';
+    return `<div class="rpoint"><div class="rp-dot ${dc}"></div><div class="rp-body">
+      <div class="rp-name">${names[i]}</div>
+      <div class="rp-wx ${wc}">${wx}</div>${st}</div></div>`;
+  }).join('');
+}
+
+async function fetchOSRM(pts){
+  const c=pts.map(p=>`${p.lon},${p.lat}`).join(';');
+  const r=await fetch(`https://router.project-osrm.org/route/v1/driving/${c}?geometries=geojson&overview=full&steps=false`,
+    {signal:AbortSignal.timeout(8000)});
+  const j=await r.json();
+  if(j.code!=='Ok') throw new Error('OSRM '+j.code);
+  return{coords:j.routes[0].geometry.coordinates.map(([ln,lt])=>[lt,ln]),
+         dist:(j.routes[0].distance/1000).toFixed(1)};
+}
+
+let map, r1L, r2L, wxMarkers=[];
+function initMap(){
+  map=L.map('map',{center:[12.9030,77.6590],zoom:13});
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    {attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(map);
+  const mk=(emoji,color)=>L.divIcon({
+    html:`<div style="width:36px;height:36px;border-radius:50%;background:${color};border:3px solid #12100a;display:flex;align-items:center;justify-content:center;font-size:15px;box-shadow:0 2px 10px ${color}55;">${emoji}</div>`,
+    className:'',iconSize:[36,36],iconAnchor:[18,18]});
+  L.marker([HOME.lat,HOME.lon],{icon:mk('🏠','#e8a832')}).addTo(map)
+    .bindPopup('<b>Home</b><br>AECS Layout, Singasandra<br>12.8865°N, 77.6493°E');
+  L.marker([WORK.lat,WORK.lon],{icon:mk('🏢','#e05c3a')}).addTo(map)
+    .bindPopup('<b>Work</b><br>Teachmint Technologies, Bellandur<br>12.9208°N, 77.6687°E');
+  // Mark all known WU stations
+  const si=L.divIcon({html:`<div style="width:26px;height:26px;border-radius:4px;background:rgba(232,168,50,.15);border:2px solid #e8a832;display:flex;align-items:center;justify-content:center;font-size:11px;">📡</div>`,
+    className:'',iconSize:[26,26],iconAnchor:[13,13]});
+  WU_STATIONS.forEach(s=>{
+    L.marker([s.lat,s.lon],{icon:si}).addTo(map)
+      .bindPopup(`<b>WU: ${s.name}</b><br>${s.id}<br>${s.lat.toFixed(6)}°N, ${s.lon.toFixed(6)}°E`);
+  });
+  const leg=L.control({position:'bottomright'});
+  leg.onAdd=()=>{
+    const d=L.DomUtil.create('div');
+    d.style.cssText='background:rgba(18,16,10,.92);padding:10px 14px;border-radius:10px;border:1px solid rgba(230,185,80,.15);font-family:"Geist Mono",monospace;font-size:11px;color:#8a7d60;line-height:2;';
+    d.innerHTML=`<div style="color:#f0e8d5;font-family:Fraunces,serif;font-style:italic;margin-bottom:2px;">Map legend</div>
+      <div><span style="display:inline-block;width:18px;height:3px;background:#e8a832;border-radius:2px;vertical-align:middle;margin-right:6px;"></span>Via HSR Layout</div>
+      <div><span style="display:inline-block;width:18px;height:0;border-bottom:3px dashed #60b4f0;vertical-align:middle;margin-right:6px;"></span>Via Haralur Rd</div>
+      <div>📡 WU station</div>`;
+    return d;
+  };
+  leg.addTo(map);
+}
+
+async function loadAll(){
+  document.getElementById('ts').textContent=
+    new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
+  const [hw,ww,m1,m2,r1r,r2r]=await Promise.allSettled([
+    fetchWU(HOME.lat,HOME.lon),
+    fetchWU(WORK.lat,WORK.lon),
+    fetchWU(MID1.lat,MID1.lon),
+    fetchWU(MID2.lat,MID2.lon),
+    fetchOSRM([HOME,MID1,{lat:12.9202,lon:77.6400},WORK]),
+    fetchOSRM([HOME,MID2,WORK]),
+  ]);
+  const hwv=hw.status==='fulfilled'?hw.value:null;
+  const wwv=ww.status==='fulfilled'?ww.value:null;
+  const m1v=m1.status==='fulfilled'?m1.value:null;
+  const m2v=m2.status==='fulfilled'?m2.value:null;
+  if(hwv) renderLoc('home',hwv,HOME.lat,HOME.lon); else renderLocError('home',hw.reason?.message??'API call failed');
+  if(wwv) renderLoc('work',wwv,WORK.lat,WORK.lon); else renderLocError('work',ww.reason?.message??'API call failed');
+  renderRoute(1,MID1.label,[hwv,m1v,wwv],r1r.status==='fulfilled'?r1r.value.dist:null);
+  renderRoute(2,MID2.label,[hwv,m2v,wwv],r2r.status==='fulfilled'?r2r.value.dist:null);
+  const r1=r1r.status==='fulfilled'?r1r.value:{coords:FB1};
+  const r2=r2r.status==='fulfilled'?r2r.value:{coords:FB2};
+  if(r1L) map.removeLayer(r1L);
+  if(r2L) map.removeLayer(r2L);
+  r1L=L.polyline(r1.coords,{color:'#e8a832',weight:4.5,opacity:.85}).addTo(map);
+  r2L=L.polyline(r2.coords,{color:'#60b4f0',weight:4.5,opacity:.85,dashArray:'10 6'}).addTo(map);
+  wxMarkers.forEach(m=>map.removeLayer(m)); wxMarkers=[];
+  [[MID1,m1v],[MID2,m2v]].forEach(([pt,w])=>{
+    if(!w) return;
+    const color=w.raining?'#60b4f0':'#72c98a', emoji=w.raining?'🌧':'☀️';
+    const icon=L.divIcon({html:`<div style="width:28px;height:28px;border-radius:50%;background:${color}22;border:2px solid ${color};display:flex;align-items:center;justify-content:center;font-size:13px;">${emoji}</div>`,
+      className:'',iconSize:[28,28],iconAnchor:[14,14]});
+    wxMarkers.push(L.marker([pt.lat,pt.lon],{icon}).addTo(map)
+      .bindPopup(`<b>${pt.label}</b><br>${w.label} · ${w.temp!=null?w.temp.toFixed(1):'—'}°C<br>Rain: ${w.rainInt.toFixed(2)} mm/min · Accum: ${w.rainAcc.toFixed(1)} mm`));
+  });
+  document.getElementById('map-loading').classList.add('hide');
+  setTimeout(()=>document.getElementById('map-loading').style.display='none',500);
+}
+
+updateKeyBar();
+initMap();
+loadAll();
+setInterval(()=>loadAll(), 5*60*1000);
+<\/script>
+</body>
+</html>
