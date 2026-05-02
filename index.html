@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Commute Weather — Kudlu ↔ Bellandur</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚗</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <style>
+    :root {
+      --bg:        #0e1117;
+      --surface:   #161b25;
+      --surface2:  #1d2535;
+      --border:    rgba(255,255,255,0.08);
+      --text:      #e8edf5;
+      --muted:     #7a8499;
+      --accent:    #4f9cf9;
+      --rain:      #4f9cf9;
+      --dry:       #36c98e;
+      --warn:      #f5a623;
+      --font-head: 'Instrument Serif', Georgia, serif;
+      --font-body: 'DM Sans', sans-serif;
+      --font-mono: 'DM Mono', monospace;
+      --r:   16px;
+      --r-sm: 10px;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: 4rem;
+      overflow-x: hidden;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      padding: 2.5rem 1.5rem 1.5rem;
+      max-width: 900px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .header-title {
+      font-family: var(--font-head);
+      font-size: clamp(1.6rem, 5vw, 2.4rem);
+      font-weight: 400;
+      letter-spacing: -0.3px;
+      line-height: 1.1;
+      color: var(--text);
+    }
+
+    .header-title em {
+      font-style: italic;
+      color: var(--accent);
+    }
+
+    .last-updated {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--muted);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 0.4rem 0.9rem;
+      border-radius: 50px;
+      white-space: nowrap;
+    }
+
+    .page { max-width: 900px; margin: 0 auto; padding: 0 1.5rem; }
+
+    /* ── SECTION LABEL ── */
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.9rem;
+    }
+
+    /* ── LOCATIONS GRID ── */
+    .locations-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    @media (max-width: 580px) {
+      .locations-grid { grid-template-columns: 1fr; }
+    }
+
+    .location-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 1.5rem;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.3s;
+    }
+
+    .location-card.raining { border-color: rgba(79,156,249,0.4); }
+    .location-card.dry     { border-color: rgba(54,201,142,0.4); }
+
+    .location-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      opacity: 0.04;
+      pointer-events: none;
+      transition: background 0.5s;
+    }
+    .location-card.raining::before { background: linear-gradient(135deg, #4f9cf9, transparent 60%); opacity: 0.08; }
+    .location-card.dry::before     { background: linear-gradient(135deg, #36c98e, transparent 60%); opacity: 0.07; }
+
+    .loc-tag {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-bottom: 0.8rem;
+    }
+    .loc-tag.home { background: rgba(79,156,249,0.15); color: #7ec4ff; }
+    .loc-tag.work { background: rgba(245,166,35,0.15); color: #f5c670; }
+
+    .loc-name {
+      font-family: var(--font-head);
+      font-size: 1.25rem;
+      font-weight: 400;
+      line-height: 1.3;
+      margin-bottom: 0.25rem;
+    }
+
+    .loc-address {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 1.2rem;
+      line-height: 1.5;
+    }
+
+    .rain-answer {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 1rem;
+    }
+
+    .rain-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .rain-dot.rain { background: var(--rain); box-shadow: 0 0 8px rgba(79,156,249,0.6); animation: pulse 2s ease-in-out infinite; }
+    .rain-dot.dry  { background: var(--dry);  box-shadow: 0 0 8px rgba(54,201,142,0.5); }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50%       { transform: scale(1.4); opacity: 0.7; }
+    }
+
+    .rain-text {
+      font-family: var(--font-head);
+      font-size: 1.5rem;
+      font-style: italic;
+    }
+    .rain-text.rain { color: var(--rain); }
+    .rain-text.dry  { color: var(--dry); }
+
+    .weather-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.6rem;
+    }
+
+    .stat {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      padding: 0.6rem 0.75rem;
+    }
+
+    .stat-label {
+      font-size: 0.68rem;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .stat-value {
+      font-family: var(--font-mono);
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: var(--text);
+      margin-top: 2px;
+    }
+
+    .loading-shimmer {
+      background: linear-gradient(90deg, var(--surface2) 25%, var(--surface) 50%, var(--surface2) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s linear infinite;
+      border-radius: 6px;
+      height: 1em;
+      width: 60%;
+    }
+
+    @keyframes shimmer { to { background-position: -200% 0; } }
+
+    /* ── ROUTES ── */
+    .routes-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    @media (max-width: 580px) {
+      .routes-grid { grid-template-columns: 1fr; }
+    }
+
+    .route-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 1.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .route-number {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .route-name {
+      font-family: var(--font-head);
+      font-size: 1.1rem;
+      font-weight: 400;
+      margin-bottom: 0.25rem;
+    }
+
+    .route-via {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 1.1rem;
+    }
+
+    .route-status {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.9rem;
+    }
+
+    .status-pill {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      font-weight: 500;
+      padding: 3px 10px;
+      border-radius: 20px;
+      letter-spacing: 0.04em;
+    }
+    .status-pill.clear { background: rgba(54,201,142,0.15); color: #36c98e; border: 1px solid rgba(54,201,142,0.25); }
+    .status-pill.rain  { background: rgba(79,156,249,0.15); color: #4f9cf9; border: 1px solid rgba(79,156,249,0.25); }
+    .status-pill.warn  { background: rgba(245,166,35,0.15); color: #f5a623; border: 1px solid rgba(245,166,35,0.25); }
+
+    .route-points {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .route-point {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      position: relative;
+    }
+
+    .route-point:not(:last-child)::before {
+      content: '';
+      position: absolute;
+      left: 7px;
+      top: 16px;
+      width: 1px;
+      height: calc(100% + 2px);
+      background: var(--border);
+    }
+
+    .rp-dot {
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      background: var(--surface2);
+      flex-shrink: 0;
+      margin-top: 2px;
+      transition: border-color 0.3s, background 0.3s;
+    }
+    .rp-dot.rain  { border-color: #4f9cf9; background: rgba(79,156,249,0.2); }
+    .rp-dot.dry   { border-color: #36c98e; background: rgba(54,201,142,0.2); }
+    .rp-dot.start, .rp-dot.end { border-color: var(--muted); background: var(--muted); }
+
+    .rp-info { padding-bottom: 0.9rem; flex: 1; }
+
+    .rp-name {
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .rp-weather {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .rp-weather.rain { color: #6cb4ff; }
+    .rp-weather.dry  { color: #5dd4a0; }
+
+    /* ── MAP ── */
+    .map-wrap {
+      border-radius: var(--r);
+      overflow: hidden;
+      border: 1px solid var(--border);
+      height: 400px;
+      margin-bottom: 2rem;
+    }
+
+    #map { height: 100%; width: 100%; }
+
+    /* Map dark filter */
+    .leaflet-tile { filter: brightness(0.7) saturate(0.6) hue-rotate(195deg); }
+    .leaflet-container { background: #0e1117; }
+
+    /* ── DIVIDER ── */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 2rem 0;
+    }
+
+    /* ── FOOTER ── */
+    .footer {
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--muted);
+      padding-top: 1rem;
+    }
+
+    .footer a { color: var(--muted); }
+
+    /* ── ANIMATIONS ── */
+    .fade-in { animation: fadeIn 0.7s ease both; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+    .delay-1 { animation-delay: 0.1s; }
+    .delay-2 { animation-delay: 0.2s; }
+    .delay-3 { animation-delay: 0.3s; }
+    .delay-4 { animation-delay: 0.4s; }
+    .delay-5 { animation-delay: 0.5s; }
+
+    /* ── REFRESH BTN ── */
+    .refresh-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      padding: 0.35rem 0.8rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+      margin-left: 0.5rem;
+      letter-spacing: 0.04em;
+    }
+    .refresh-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <h1 class="header-title">Your <em>Commute</em><br>Weather</h1>
+    </div>
+    <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+      <div class="last-updated">Updated <span id="ts">—</span></div>
+      <button class="refresh-btn" onclick="loadAll()">↻ refresh</button>
+    </div>
+  </div>
+
+  <div class="page">
+
+    <!-- LOCATIONS -->
+    <div class="section-label fade-in">01 — Current conditions</div>
+    <div class="locations-grid">
+
+      <div class="location-card fade-in delay-1" id="card-home">
+        <span class="loc-tag home">Home</span>
+        <div class="loc-name">AECS Layout, Singasandra</div>
+        <div class="loc-address">Kudlu, Bengaluru 560068</div>
+        <div class="rain-answer" id="rain-home">
+          <div class="loading-shimmer" style="width:120px;height:28px;border-radius:6px;"></div>
+        </div>
+        <div class="weather-stats" id="stats-home">
+          <div class="stat"><div class="stat-label">Temp</div><div class="stat-value loading-shimmer" style="width:50px;height:14px;border-radius:4px;"></div></div>
+          <div class="stat"><div class="stat-label">Humidity</div><div class="stat-value loading-shimmer" style="width:40px;height:14px;border-radius:4px;"></div></div>
+          <div class="stat"><div class="stat-label">Wind</div><div class="stat-value loading-shimmer" style="width:60px;height:14px;border-radius:4px;"></div></div>
+          <div class="stat"><div class="stat-label">Precip.</div><div class="stat-value loading-shimmer" style="width:50px;height:14px;border-radius:4px;"></div></div>
+        </div>
+      </div>
+
+      <div class="location-card fade-in delay-2" id="card-work">
+        <span class="loc-tag work">Work</span>
+        <div class="loc-name">Teachmint Technologies</div>
+        <div class="loc-address">Opp. Bellandur Police Station,<br>Sarjapur Main Road, 560103</div>
+        <div class="rain-answer" id="rain-work">
+          <div class="loading-shimmer" style="width:120px;height:28px;border-radius:6px;"></div>
+        </div>
+        <div class="weather-stats" id="stats-work">
+          <div class="stat"><div class="stat-label">Temp</div><div class="stat-value loading-shimmer" style="width:50px;height:14px;border-radius:4px;"></div></div>
+          <div class="stat"><div class="stat-label">Humidity</div><div class="stat-value loading-shimmer" style="width:40px;height:14px;border-radius:4px;"></div></div>
+          <div class="stat"><div class="stat-label">Wind</div><div class="stat-value loading-shimmer" style="width:60px;height:14px;border-radius:4px;"></div></div>
+          <div class="stat"><div class="stat-label">Precip.</div><div class="stat-value loading-shimmer" style="width:50px;height:14px;border-radius:4px;"></div></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ROUTES -->
+    <div class="section-label fade-in delay-2">02 — Route check</div>
+    <div class="routes-grid">
+
+      <div class="route-card fade-in delay-3" id="route-1">
+        <div class="route-number">Route 01</div>
+        <div class="route-name">Via HSR Layout</div>
+        <div class="route-via">Kudlu → HSR Layout → Agara Junction → Sarjapur Rd · ~11 km</div>
+        <div class="route-status" id="rs-1">
+          <div class="loading-shimmer" style="width:80px;height:22px;border-radius:12px;"></div>
+        </div>
+        <div class="route-points" id="rp-1">
+          <div class="route-point">
+            <div class="rp-dot start"></div>
+            <div class="rp-info"><div class="rp-name">Singasandra / Kudlu</div><div class="rp-weather loading-shimmer" style="width:90px;height:12px;"></div></div>
+          </div>
+          <div class="route-point">
+            <div class="rp-dot"></div>
+            <div class="rp-info"><div class="rp-name">HSR Layout / Agara Jcn</div><div class="rp-weather loading-shimmer" style="width:90px;height:12px;"></div></div>
+          </div>
+          <div class="route-point">
+            <div class="rp-dot end"></div>
+            <div class="rp-info"><div class="rp-name">Bellandur, Sarjapur Rd</div><div class="rp-weather loading-shimmer" style="width:90px;height:12px;"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="route-card fade-in delay-4" id="route-2">
+        <div class="route-number">Route 02</div>
+        <div class="route-name">Via Haralur Road</div>
+        <div class="route-via">Kudlu Gate → Haralur Rd → Sarjapur Rd · ~9 km</div>
+        <div class="route-status" id="rs-2">
+          <div class="loading-shimmer" style="width:80px;height:22px;border-radius:12px;"></div>
+        </div>
+        <div class="route-points" id="rp-2">
+          <div class="route-point">
+            <div class="rp-dot start"></div>
+            <div class="rp-info"><div class="rp-name">Singasandra / Kudlu</div><div class="rp-weather loading-shimmer" style="width:90px;height:12px;"></div></div>
+          </div>
+          <div class="route-point">
+            <div class="rp-dot"></div>
+            <div class="rp-info"><div class="rp-name">Haralur Road Mid</div><div class="rp-weather loading-shimmer" style="width:90px;height:12px;"></div></div>
+          </div>
+          <div class="route-point">
+            <div class="rp-dot end"></div>
+            <div class="rp-info"><div class="rp-name">Bellandur, Sarjapur Rd</div><div class="rp-weather loading-shimmer" style="width:90px;height:12px;"></div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- MAP -->
+    <div class="section-label fade-in delay-5">03 — On the map</div>
+    <div class="map-wrap fade-in delay-5">
+      <div id="map"></div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="footer">
+      Weather via <a href="https://open-meteo.com" target="_blank">Open-Meteo</a> (free, no login) ·
+      Map via <a href="https://openstreetmap.org" target="_blank">OpenStreetMap</a> ·
+      Auto-refreshes every 5 minutes
+    </div>
+
+  </div><!-- /page -->
+
+  <script>
+  // ──────────────────────────────────────────────
+  //  CONFIG — fixed points
+  // ──────────────────────────────────────────────
+  const POINTS = {
+    home: { lat: 12.8865, lon: 77.6493, label: 'Home — Singasandra' },
+    work: { lat: 12.9208, lon: 77.6687, label: 'Work — Bellandur' },
+    silk: { lat: 12.9116, lon: 77.6474, label: 'HSR Layout' },
+    haralur: { lat: 12.9050, lon: 77.6610, label: 'Haralur Road' },
+  };
+
+  // Route polylines (approximate real-road geometry)
+  const ROUTE1 = [
+    [12.8865, 77.6493],  // Home — Singasandra
+    [12.8920, 77.6490],  // North on inner road
+    [12.8980, 77.6483],
+    [12.9040, 77.6476],  // Entering HSR Layout
+    [12.9116, 77.6474],  // HSR Layout
+    [12.9160, 77.6438],
+    [12.9202, 77.6400],  // Agara Junction
+    [12.9205, 77.6500],  // East on Sarjapur Road
+    [12.9207, 77.6600],
+    [12.9208, 77.6687],  // Work — Bellandur
+  ];
+
+  const ROUTE2 = [
+    [12.8865, 77.6493],
+    [12.8900, 77.6530],
+    [12.8960, 77.6570],
+    [12.9020, 77.6595],
+    [12.9050, 77.6610],
+    [12.9110, 77.6640],
+    [12.9160, 77.6670],
+    [12.9208, 77.6687],
+  ];
+
+  // ──────────────────────────────────────────────
+  //  WMO CODE → LABEL
+  // ──────────────────────────────────────────────
+  function wmo(code) {
+    if (code == null) return '—';
+    const m = {
+      0:'Clear sky', 1:'Mainly clear', 2:'Partly cloudy', 3:'Overcast',
+      45:'Fog', 48:'Icy fog',
+      51:'Light drizzle', 53:'Drizzle', 55:'Dense drizzle',
+      61:'Slight rain', 63:'Moderate rain', 65:'Heavy rain',
+      71:'Slight snow', 73:'Snow', 75:'Heavy snow',
+      80:'Rain showers', 81:'Moderate showers', 82:'Violent showers',
+      95:'Thunderstorm', 96:'T-storm + hail', 99:'T-storm + heavy hail',
+    };
+    return m[code] ?? `Code ${code}`;
+  }
+
+  const RAIN_CODES = new Set([51,53,55,61,63,65,71,73,75,80,81,82,95,96,99]);
+
+  function isRainy(w) {
+    return (w.precipitation ?? 0) > 0 || RAIN_CODES.has(w.weather_code);
+  }
+
+  // ──────────────────────────────────────────────
+  //  FETCH OPEN-METEO
+  // ──────────────────────────────────────────────
+  const cache = {};
+
+  async function fetchWeather(lat, lon) {
+    const key = `${lat}_${lon}`;
+    const url = `https://api.open-meteo.com/v1/forecast?`
+      + `latitude=${lat}&longitude=${lon}`
+      + `&current=temperature_2m,relative_humidity_2m,apparent_temperature,`
+      + `precipitation,weather_code,wind_speed_10m,wind_direction_10m`
+      + `&timezone=Asia%2FKolkata`;
+
+    const res  = await fetch(url);
+    const json = await res.json();
+    const c    = json.current;
+
+    return {
+      temperature:  c.temperature_2m,
+      feels:        c.apparent_temperature,
+      humidity:     c.relative_humidity_2m,
+      wind:         c.wind_speed_10m,
+      precipitation: c.precipitation,
+      code:         c.weather_code,
+      raining:      (c.precipitation ?? 0) > 0 || RAIN_CODES.has(c.weather_code),
+    };
+  }
+
+  // ──────────────────────────────────────────────
+  //  RENDER LOCATION CARD
+  // ──────────────────────────────────────────────
+  function renderLocation(id, w) {
+    const card    = document.getElementById(`card-${id}`);
+    const rainEl  = document.getElementById(`rain-${id}`);
+    const statsEl = document.getElementById(`stats-${id}`);
+
+    card.className = `location-card fade-in ${w.raining ? 'raining' : 'dry'}`;
+
+    rainEl.innerHTML = `
+      <div class="rain-dot ${w.raining ? 'rain' : 'dry'}"></div>
+      <span class="rain-text ${w.raining ? 'rain' : 'dry'}">${w.raining ? 'Raining' : 'Dry'}</span>
+      <span style="font-size:0.78rem;color:var(--muted);margin-left:4px;">${wmo(w.code)}</span>
+    `;
+
+    statsEl.innerHTML = `
+      <div class="stat">
+        <div class="stat-label">Temp</div>
+        <div class="stat-value">${w.temperature != null ? w.temperature.toFixed(1) + ' °C' : '—'}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Humidity</div>
+        <div class="stat-value">${w.humidity != null ? w.humidity.toFixed(0) + ' %' : '—'}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Wind</div>
+        <div class="stat-value">${w.wind != null ? w.wind.toFixed(1) + ' km/h' : '—'}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Precip.</div>
+        <div class="stat-value ${w.raining ? 'text-rain' : ''}" style="${w.raining ? 'color:#7ec4ff' : ''}">${w.precipitation != null ? w.precipitation.toFixed(2) + ' mm' : '—'}</div>
+      </div>
+    `;
+  }
+
+  // ──────────────────────────────────────────────
+  //  RENDER ROUTE
+  // ──────────────────────────────────────────────
+  function renderRoute(n, weathers) {
+    // weathers = [homeW, midW, workW]
+    const anyRain = weathers.some(w => w.raining);
+    const allClear = weathers.every(w => !w.raining);
+
+    const statusEl = document.getElementById(`rs-${n}`);
+    const pointsEl = document.getElementById(`rp-${n}`);
+
+    let pillClass, pillText;
+    if (allClear)    { pillClass = 'clear'; pillText = '✓ Clear route'; }
+    else if (anyRain){ pillClass = 'rain';  pillText = '⚡ Rain on route'; }
+    else              { pillClass = 'warn';  pillText = '△ Uncertain'; }
+
+    statusEl.innerHTML = `<span class="status-pill ${pillClass}">${pillText}</span>`;
+
+    const midLabel  = n === 1 ? 'HSR Layout / Agara Jcn' : 'Haralur Road Mid';
+    const names     = ['Singasandra / Kudlu', midLabel, 'Bellandur, Sarjapur Rd'];
+    const isDot     = ['start', '', 'end'];
+
+    pointsEl.innerHTML = weathers.map((w, i) => `
+      <div class="route-point">
+        <div class="rp-dot ${isDot[i] || (w.raining ? 'rain' : 'dry')}"></div>
+        <div class="rp-info">
+          <div class="rp-name">${names[i]}</div>
+          <div class="rp-weather ${w.raining ? 'rain' : 'dry'}">
+            ${w.temperature != null ? w.temperature.toFixed(1) + '°C · ' : ''}${wmo(w.code)}${w.raining ? ' · ' + w.precipitation.toFixed(2) + 'mm' : ''}
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // ──────────────────────────────────────────────
+  //  MAP
+  // ──────────────────────────────────────────────
+  let map, route1Layer, route2Layer, markerHome, markerWork;
+
+  function initMap() {
+    map = L.map('map', {
+      center: [12.9020, 77.6590],
+      zoom: 13,
+      zoomControl: true,
+      attributionControl: true,
+    });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(map);
+
+    // Route lines
+    route1Layer = L.polyline(ROUTE1, {
+      color: '#4f9cf9', weight: 4, opacity: 0.7, dashArray: '8 4',
+    }).addTo(map);
+
+    route2Layer = L.polyline(ROUTE2, {
+      color: '#f5a623', weight: 4, opacity: 0.7,
+    }).addTo(map);
+
+    // Custom markers
+    const homeIcon = L.divIcon({
+      html: `<div style="
+        width:34px;height:34px;border-radius:50%;
+        background:#4f9cf9;
+        border:3px solid #0e1117;
+        display:flex;align-items:center;justify-content:center;
+        font-size:14px;box-shadow:0 2px 8px rgba(79,156,249,0.5);">🏠</div>`,
+      className: '',
+      iconSize: [34, 34],
+      iconAnchor: [17, 17],
+    });
+
+    const workIcon = L.divIcon({
+      html: `<div style="
+        width:34px;height:34px;border-radius:50%;
+        background:#f5a623;
+        border:3px solid #0e1117;
+        display:flex;align-items:center;justify-content:center;
+        font-size:14px;box-shadow:0 2px 8px rgba(245,166,35,0.5);">🏢</div>`,
+      className: '',
+      iconSize: [34, 34],
+      iconAnchor: [17, 17],
+    });
+
+    markerHome = L.marker([POINTS.home.lat, POINTS.home.lon], { icon: homeIcon })
+      .addTo(map)
+      .bindPopup('<b>Home</b><br>AECS Layout, Singasandra, Kudlu');
+
+    markerWork = L.marker([POINTS.work.lat, POINTS.work.lon], { icon: workIcon })
+      .addTo(map)
+      .bindPopup('<b>Work</b><br>Teachmint Technologies<br>Sarjapur Main Road, Bellandur');
+
+    // Legend
+    const legend = L.control({ position: 'bottomright' });
+    legend.onAdd = () => {
+      const d = L.DomUtil.create('div');
+      d.style.cssText = `
+        background:rgba(14,17,23,0.88);padding:10px 14px;border-radius:10px;
+        border:1px solid rgba(255,255,255,0.1);font-family:'DM Sans',sans-serif;
+        font-size:11px;color:#7a8499;line-height:1.9;
+      `;
+      d.innerHTML = `
+        <div style="color:#e8edf5;font-weight:500;margin-bottom:4px;">Routes</div>
+        <div><span style="display:inline-block;width:18px;height:3px;background:#4f9cf9;border-radius:2px;vertical-align:middle;margin-right:6px;"></span>Via HSR Layout</div>
+        <div><span style="display:inline-block;width:18px;height:3px;background:#f5a623;border-radius:2px;vertical-align:middle;margin-right:6px;"></span>Via Haralur Rd</div>
+      `;
+      return d;
+    };
+    legend.addTo(map);
+  }
+
+  function updateMapMarkers(homeW, workW, silkW, haralurW) {
+    const weathers = [
+      { key: 'home',    w: homeW,    coord: [POINTS.home.lat, POINTS.home.lon] },
+      { key: 'work',    w: workW,    coord: [POINTS.work.lat, POINTS.work.lon] },
+      { key: 'silk',    w: silkW,    coord: [POINTS.silk.lat, POINTS.silk.lon] },
+      { key: 'haralur', w: haralurW, coord: [POINTS.haralur.lat, POINTS.haralur.lon] },
+    ];
+
+    weathers.forEach(({ w, coord, key }) => {
+      if (!w) return;
+      const color = w.raining ? '#4f9cf9' : '#36c98e';
+      const label = w.raining ? '🌧' : '☀️';
+      if (key === 'home' || key === 'work') return; // already have icons
+
+      const icon = L.divIcon({
+        html: `<div style="
+          width:26px;height:26px;border-radius:50%;
+          background:${color}22;border:2px solid ${color};
+          display:flex;align-items:center;justify-content:center;
+          font-size:11px;">
+          ${label}
+        </div>`,
+        className: '',
+        iconSize: [26, 26],
+        iconAnchor: [13, 13],
+      });
+
+      L.marker(coord, { icon })
+        .addTo(map)
+        .bindPopup(`<b>${POINTS[key].label}</b><br>${wmo(w.code)} · ${w.temperature != null ? w.temperature.toFixed(1) : '—'}°C`);
+    });
+  }
+
+  // ──────────────────────────────────────────────
+  //  MAIN LOAD
+  // ──────────────────────────────────────────────
+  async function loadAll() {
+    document.getElementById('ts').textContent = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+
+    try {
+      const [homeW, workW, silkW, haralurW] = await Promise.all([
+        fetchWeather(POINTS.home.lat,    POINTS.home.lon),
+        fetchWeather(POINTS.work.lat,    POINTS.work.lon),
+        fetchWeather(POINTS.silk.lat,    POINTS.silk.lon),
+        fetchWeather(POINTS.haralur.lat, POINTS.haralur.lon),
+      ]);
+
+      renderLocation('home', homeW);
+      renderLocation('work', workW);
+
+      renderRoute(1, [homeW, silkW, workW]);
+      renderRoute(2, [homeW, haralurW, workW]);
+
+      updateMapMarkers(homeW, workW, silkW, haralurW);
+
+    } catch (e) {
+      console.error('Weather fetch failed', e);
+    }
+  }
+
+  // ──────────────────────────────────────────────
+  //  BOOT
+  // ──────────────────────────────────────────────
+  initMap();
+  loadAll();
+
+  // Auto-refresh every 5 minutes
+  setInterval(loadAll, 5 * 60 * 1000);
+  </script>
+</body>
+</html>
