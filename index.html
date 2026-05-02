@@ -655,7 +655,7 @@ function updateWUKeyBar(){
 async function fetchWUWeather(lat,lon){
   const r=await fetch(`https://www.weatherunion.com/gw/weather/external/v0/get_weather_data?latitude=${lat}&longitude=${lon}`,{headers:{'x-zomato-api-key':getWUKey()}});
   const j=await r.json();
-  if(j.status!==200) throw new Error(j.message||'WU '+j.status);
+  if(Number(j.status)!==200) throw new Error(j.message||'WU status: '+j.status);
   const d=j.locality_weather_data||{};
   const ri=parseFloat(d.rain_intensity)||0, ra=parseFloat(d.rain_accumulation)||0;
   return {
